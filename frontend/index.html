@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartTodo - 待办事项管理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; background: #f0f2f5; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        
+        .auth-box, .app-box { 
+            background: white; 
+            border-radius: 10px; 
+            padding: 30px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .hidden { display: none; }
+        
+        .form-group { margin-bottom: 15px; }
+        input, select, textarea, button { 
+            width: 100%; 
+            padding: 10px; 
+            margin: 5px 0; 
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button { 
+            background: #3498db; 
+            color: white; 
+            border: none; 
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover { background: #2980b9; }
+        
+        .task-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); 
+            gap: 15px; 
+            margin-top: 20px;
+        }
+        .task-card { 
+            background: white; 
+            padding: 15px; 
+            border-radius: 5px; 
+            border-left: 4px solid #3498db;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* 已完成任务卡片样式 */
+        .task-card.completed {
+            background-color: #e9ecef;
+            border-left-color: #6c757d;
+            color: #6c757d;
+        }
+        .task-card.completed h4 {
+            text-decoration: line-through;
+            opacity: 0.8;
+        }
+
+        .header { 
+            background: #3498db; 
+            color: white; 
+            padding: 20px; 
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* 视图切换按钮样式 */
+        .view-switch {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .view-switch button {
+            width: auto;
+            padding: 8px 15px;
+        }
+        .view-switch button.active {
+            background-color: #2980b9;
+        }
+        
+        /* 日历视图样式 */
+        .calendar-view {
+            margin-top: 20px;
+            width: 100%;
+        }
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+        }
+        .calendar-day-header {
+            text-align: center;
+            font-weight: bold;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 5px;
+        }
+        .calendar-day {
+            min-height: 100px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 5px;
+            position: relative;
+        }
+        .calendar-day-number {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .calendar-day.other-month {
+            background: #f5f5f5;
+            opacity: 0.5;
+        }
+        .calendar-day.has-tasks {
+            background: #e8f5e9;
+            border-color: #81c784;
+        }
+        .task-mini {
+            font-size: 12px;
+            padding: 2px 5px;
+            margin-bottom: 3px;
+            background: #bbdefb;
+            border-radius: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+        }
+        .task-mini.completed {
+            background: #e0e0e0;
+            text-decoration: line-through;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- 登录/注册界面 -->
+        <div id="authBox" class="auth-box">
+            <h2>SmartTodo 登录</h2>
+            <div class="form-group">
+                <input type="text" id="username" placeholder="用户名">
+                <input type="password" id="password" placeholder="密码">
+                <button onclick="login()">登录</button>
+                <p style="text-align: center; margin-top: 10px;">
+                    <a href="#" onclick="showRegister()">注册新账号</a>
+                </p>
+            </div>
+            
+            <div id="registerForm" class="hidden">
+                <h3>注册新用户</h3>
+                <input type="text" id="regUsername" placeholder="用户名(仅字母/数字/下划线,不少于三位)">
+                <input type="email" id="regEmail" placeholder="邮箱">
+                <input type="password" id="regPassword" placeholder="密码(密码由大写字母及数字构成)">
+                <input type="password" id="regConfirmPassword" placeholder="确认密码">
+                <button onclick="register()">注册</button>
+                <button onclick="showLogin()">返回登录</button>
+            </div>
+        </div>
+        
+        <!-- 应用主界面 -->
+        <div id="appBox" class="app-box hidden">
+            <div class="header">
+                <h2>我的待办事项</h2>
+                <div>
+                    <span id="welcomeUser"></span>
+                    <button onclick="logout()" style="margin-left: 10px;">退出</button>
+                </div>
+            </div>
+            
+            <div style="padding: 20px;">
+                <button onclick="showTaskForm()" style="width: auto;">+ 新建任务</button>
+                
+                <!-- 视图切换按钮 -->
+                <div class="view-switch">
+                    <button id="btnListView" onclick="switchView('list')" class="active">列表视图</button>
+                    <button id="btnCalendarView" onclick="switchView('calendar')">日历视图</button>
+                </div>
+                
+                <div style="margin: 20px 0;">
+                    <select id="filterCategory" onchange="loadTasks()">
+                        <option value="">全部分类</option>
+                        <option value="work">工作</option>
+                        <option value="personal">个人</option>
+                        <option value="shopping">购物</option>
+                        <option value="health">健康</option>
+                        <option value="learning">学习</option>
+                    </select>
+                </div>
+                
+                <!-- 列表视图容器 - 核心：默认显示 -->
+                <div id="taskList" class="task-grid"></div>
+                
+                <!-- 日历视图容器 - 核心：默认隐藏 -->
+                <div id="calendarView" class="calendar-view hidden"></div>
+            </div>
+        </div>
+        
+        <!-- 创建任务模态框 -->
+        <div id="taskModal" class="auth-box hidden">
+            <h3>创建新任务</h3>
+            <input type="text" id="taskTitle" placeholder="任务标题">
+            <textarea id="taskDesc" placeholder="任务描述" rows="3"></textarea>
+            <select id="taskPriority">
+                <option value="low">低优先级</option>
+                <option value="medium" selected>中优先级</option>
+                <option value="high">高优先级</option>
+                <option value="urgent">紧急</option>
+            </select>
+            <select id="taskCategory">
+                <option value="work">工作</option>
+                <option value="personal" selected>个人</option>
+                <option value="shopping">购物</option>
+                <option value="health">健康</option>
+                <option value="learning">学习</option>
+            </select>
+            <input type="datetime-local" id="taskDueDate" placeholder="完成日期">
+            <div style="display: flex; gap: 10px; margin-Top: 15px;">
+                <button onclick="createTask()">创建</button>
+                <button onclick="hideTaskForm()" style="background: #95a5a6;">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let token = null;
+        let currentUser = null;
+        let currentView = 'list'; // 当前视图：list/calendar
+        let currentTasks = []; // 缓存当前任务列表
+        let currentCalendarDate = new Date(); // 当前日历显示的年月
+        
+        // 显示注册表单
+        function showRegister() {
+            document.getElementById('registerForm').classList.remove('hidden');
+        }
+        
+        // 显示登录表单
+        function showLogin() {
+            document.getElementById('registerForm').classList.add('hidden');
+        }
+        
+        // 登录
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                alert('请输入用户名和密码');
+                return;
+            }
+            
+            try {
+                const params = new URLSearchParams();
+                params.append('username', username);
+                params.append('password', password);
+                const response = await fetch(`${API_URL}/api/auth/login?${params.toString()}`, {
+                    method: 'POST'
+                });
+                
+                if (!response.ok) {
+                    // 关键修改：解析后端返回的具体错误信息
+                    const errorData = await response.json().catch(() => ({ detail: '登录失败' }));
+                    throw new Error(errorData.detail || `登录失败（状态码：${response.status}）`);
+                }
+                
+                const data = await response.json();
+                token = data.access_token;
+                currentUser = data.user;
+                
+                document.getElementById('authBox').classList.add('hidden');
+                document.getElementById('appBox').classList.remove('hidden');
+                document.getElementById('welcomeUser').textContent = `欢迎，${currentUser.username}`;
+                loadTasks();
+                
+            } catch (error) {
+                // 弹窗展示具体错误原因
+                alert('登录失败：' + error.message);
+            }
+        }
+        
+        //注册
+        async function register() {
+            const username = document.getElementById('regUsername').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const confirm = document.getElementById('regConfirmPassword').value;
+            
+            if (!username || !email || !password) {
+                alert('请填写所有字段');
+                return;
+            }
+            
+            if (password !== confirm) {
+                alert('两次输入的密码不一致');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/api/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+                
+                if (!response.ok) {
+                    // 关键优化：兼容后端非JSON格式的错误响应
+                    const errorData = await response.json().catch(() => ({ detail: '注册失败' }));
+                    throw new Error(errorData.detail || `注册失败（状态码：${response.status}）`);
+                }
+                
+                alert('注册成功！请使用新账号登录');
+                showLogin();
+                
+            } catch (error) {
+                // 弹窗展示具体错误原因
+                alert('注册失败：' + error.message);
+            }
+        }
+        // 退出
+        function logout() {
+            token = null;
+            currentUser = null;
+            document.getElementById('appBox').classList.add('hidden');
+            document.getElementById('authBox').classList.remove('hidden');
+        }
+        
+        // 显示创建任务表单
+        function showTaskForm() {
+            document.getElementById('taskModal').classList.remove('hidden');
+            const now = new Date();
+            const isoString = now.toISOString().slice(0, 16);
+            document.getElementById('taskDueDate').value = isoString;
+        }
+        
+        // 隐藏创建任务表单
+        function hideTaskForm() {
+            document.getElementById('taskModal').classList.add('hidden');
+            document.getElementById('taskTitle').value = '';
+            document.getElementById('taskDesc').value = '';
+            document.getElementById('taskDueDate').value = '';
+        }
+        
+        // 创建任务
+        async function createTask() {
+            const title = document.getElementById('taskTitle').value.trim();
+            const description = document.getElementById('taskDesc').value.trim();
+            const priority = document.getElementById('taskPriority').value;
+            const category = document.getElementById('taskCategory').value;
+            const dueDate = document.getElementById('taskDueDate').value;
+            
+            if (!title || title.length < 3) {
+                alert('任务标题至少需要3个字符！');
+                return;
+            }
+            
+            let formattedDueDate = null;
+            if (dueDate) {
+                try {
+                    const date = new Date(dueDate);
+                    formattedDueDate = date.toISOString();
+                } catch (e) {
+                    alert('日期格式错误！');
+                    return;
+                }
+            }
+            
+            try {
+                const params = new URLSearchParams();
+                params.append('token', token);
+                const url = `${API_URL}/api/tasks?${params.toString()}`;
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: title,
+                        description: description || "",
+                        priority: priority,
+                        category: category,
+                        due_date: formattedDueDate
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: '未知错误' }));
+                    throw new Error(errorData.detail || `HTTP错误: ${response.status}`);
+                }
+                
+                hideTaskForm();
+                loadTasks();
+                alert(`任务创建成功！`);
+                
+            } catch (error) {
+                alert('创建任务失败：' + error.message);
+            }
+        }
+        
+        // 加载任务列表
+        async function loadTasks() {
+            const category = document.getElementById('filterCategory').value;
+            
+            try {
+                const params = new URLSearchParams();
+                if (category) params.append('category', category);
+                if (token) params.append('token', token);
+                
+                const url = `${API_URL}/api/tasks${params.toString() ? '?' + params.toString() : ''}`;
+                const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+                
+                if (!response.ok) {
+                    throw new Error('加载任务失败');
+                }
+                
+                currentTasks = await response.json();
+                if (currentView === 'list') {
+                    renderTaskList(currentTasks);
+                } else {
+                    renderCalendar(currentTasks);
+                }
+                
+            } catch (error) {
+                console.error('加载任务失败：', error);
+                if(currentView === 'list'){
+                    document.getElementById('taskList').innerHTML = '<p>加载失败，请重试</p>';
+                }
+            }
+        }
+        
+        // 渲染任务列表
+        function renderTaskList(tasks) {
+            const container = document.getElementById('taskList');
+            
+            if (!tasks || tasks.length === 0) {
+                container.innerHTML = '<p>暂无任务，点击"新建任务"开始</p>';
+                return;
+            }
+            
+            container.innerHTML = tasks.map(task => {
+                let dueDateHtml = '';
+                if (task.due_date) {
+                    const date = new Date(task.due_date);
+                    const formattedDate = date.toLocaleString('zh-CN');
+                    dueDateHtml = `<div style="font-size: 12px; color: #888; margin-top: 5px;">截止：${formattedDate}</div>`;
+                }
+                
+                return `
+                <div class="task-card ${task.is_completed ? 'completed' : ''}">
+                    <h4>${task.title}</h4>
+                    ${task.description ? `<p>${task.description}</p>` : ''}
+                    ${dueDateHtml}
+                    <div style="font-size: 12px; color: #666; margin-top: 10px;">
+                        <span>${task.category} | ${task.priority}</span>
+                        <button onclick="completeTask(${task.id})" style="float: right; width: auto; padding: 5px 10px; font-size: 12px;" ${task.is_completed ? 'disabled' : ''}>
+                            ${task.is_completed ? '已完成' : '完成'}
+                        </button>
+                        <button onclick="deleteTask(${task.id})" style="float: right; width: auto; padding: 5px 10px; font-size: 12px; background: #e74c3c; margin-right:5px;">
+                            删除
+                        </button>
+                    </div>
+                </div>
+            `}).join('');
+        }
+        
+        //视图切换函数
+        function switchView(viewType) {
+            currentView = viewType;
+            // 1. 按钮样式切换
+            document.getElementById('btnListView').className = viewType === 'list' ? 'active' : '';
+            document.getElementById('btnCalendarView').className = viewType === 'calendar' ? 'active' : '';
+            
+            // 2. 强制控制显示隐藏 - 最关键的一行修改，彻底解决重叠问题
+            document.getElementById('taskList').style.display = viewType === 'list' ? 'grid' : 'none';
+            document.getElementById('calendarView').style.display = viewType === 'calendar' ? 'block' : 'none';
+            
+            // 3. 渲染对应视图
+            if (viewType === 'list') {
+                renderTaskList(currentTasks);
+            } else {
+                renderCalendar(currentTasks);
+            }
+        }
+        
+        // 渲染日历视图
+        function renderCalendar(tasks) {
+            const calendarContainer = document.getElementById('calendarView');
+            const year = currentCalendarDate.getFullYear();
+            const month = currentCalendarDate.getMonth();
+            const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+            
+            const calendarHeader = `
+                <div class="calendar-header">
+                    <button onclick="changeCalendarMonth(-1)" style="width: auto; padding: 5px 10px; font-size: 14px;">&lt;</button>
+                    <h3>${year}年${monthNames[month]}</h3>
+                    <button onclick="changeCalendarMonth(1)" style="width: auto; padding: 5px 10px; font-size: 14px;">&gt;</button>
+                </div>
+                <div class="calendar-grid">
+                    <div class="calendar-day-header">日</div>
+                    <div class="calendar-day-header">一</div>
+                    <div class="calendar-day-header">二</div>
+                    <div class="calendar-day-header">三</div>
+                    <div class="calendar-day-header">四</div>
+                    <div class="calendar-day-header">五</div>
+                    <div class="calendar-day-header">六</div>
+                </div>
+            `;
+            
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const daysInPrevMonth = new Date(year, month, 0).getDate();
+            
+            let calendarGrid = '<div class="calendar-grid">';
+            let dayCounter = 1;
+            let currentDay = 1;
+            
+            for (let i = 0; i < firstDayOfMonth; i++) {
+                const dayNum = daysInPrevMonth - firstDayOfMonth + i + 1;
+                calendarGrid += `<div class="calendar-day other-month">
+                    <div class="calendar-day-number">${dayNum}</div>
+                </div>`;
+                dayCounter++;
+            }
+            
+            while (currentDay <= daysInMonth) {
+                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(currentDay).padStart(2, '0')}`;
+                const dayTasks = tasks.filter(task => {
+                    if (!task.due_date) return false;
+                    const taskDate = new Date(task.due_date);
+                    return taskDate.getFullYear() === year && taskDate.getMonth() === month && taskDate.getDate() === currentDay;
+                });
+                
+                const hasTasks = dayTasks.length > 0;
+                let taskHtml = '';
+                if (hasTasks) {
+                    taskHtml = dayTasks.map(task => `
+                        <div class="task-mini ${task.is_completed ? 'completed' : ''}" title="${task.description || ''}">
+                            ${task.title}
+                        </div>
+                    `).join('');
+                }
+                
+                calendarGrid += `<div class="calendar-day ${hasTasks ? 'has-tasks' : ''}">
+                    <div class="calendar-day-number">${currentDay}</div>
+                    <div class="day-tasks">${taskHtml}</div>
+                </div>`;
+                
+                currentDay++;
+                dayCounter++;
+                
+                if (dayCounter % 7 === 0 && currentDay <= daysInMonth) {
+                    calendarGrid += '</div><div class="calendar-grid">';
+                    dayCounter = 0;
+                }
+            }
+            
+            const remainingDays = 7 - (dayCounter % 7);
+            if (remainingDays < 7) {
+                for (let i = 1; i <= remainingDays; i++) {
+                    calendarGrid += `<div class="calendar-day other-month">
+                        <div class="calendar-day-number">${i}</div>
+                    </div>`;
+                }
+            }
+            
+            calendarGrid += '</div>';
+            calendarContainer.innerHTML = calendarHeader + calendarGrid;
+        }
+        
+        // 切换日历月份
+        function changeCalendarMonth(delta) {
+            currentCalendarDate = new Date(currentCalendarDate.getFullYear(), currentCalendarDate.getMonth() + delta, 1);
+            renderCalendar(currentTasks);
+        }
+        
+        // 完成任务
+        async function completeTask(taskId) {
+            try {
+                const response = await fetch(`${API_URL}/api/tasks/${taskId}/complete?token=${token}`,  {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('操作失败');
+                }
+                
+                loadTasks();
+                alert('任务已完成！');
+                
+            } catch (error) {
+                alert('操作失败：' + error.message);
+            }
+        }
+        
+        // 删除任务
+        async function deleteTask(taskId) {
+            if (!confirm('确定要删除这个任务吗？删除后无法恢复！')) {
+                return;
+            }
+            
+            try {
+                const params = new URLSearchParams();
+                params.append('token', token);
+                const url = `${API_URL}/api/tasks/${taskId}?${params.toString()}`;
+                
+                const response = await fetch(url, { method: 'DELETE' });
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ detail: '未知错误' }));
+                    throw new Error(errorData.detail || `HTTP错误: ${response.status}`);
+                }
+                
+                loadTasks();
+                alert('任务已成功删除！');
+                
+            } catch (error) {
+                alert('删除任务失败：' + error.message);
+            }
+        }
+        
+        window.onload = function() {
+            console.log('SmartTodo 前端已加载');
+            console.log('后端API地址:', API_URL);
+        };
+    </script>
+</body>
+</html>
